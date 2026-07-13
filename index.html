@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-HK">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Aya Chatbot Eval Results Viewer</title>
+<style>
+  :root {
+    --bg: #f4f6f8;
+    --panel: #ffffff;
+    --ink: #1f2a37;
+    --ink-soft: #4b5563;
+    --muted: #8a94a6;
+    --line: #e3e8ef;
+    --accent: #2f6f8f;          /* calm teal-blue */
+    --accent-soft: #e8f1f5;
+    --patient: #eef2f7;         /* patient bubble */
+    --patient-line: #d6deea;
+    --aya: #e9f3ee;             /* aya chatbot bubble */
+    --aya-line: #cfe3da;
+    --good: #2e8b6f;
+    --warn: #c08a2e;
+    --bad: #c0564a;
+    --shadow: 0 1px 3px rgba(31,42,55,.08), 0 1px 2px rgba(31,42,55,.04);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "PingFang HK", "PingFang SC", "Microsoft YaHei",
+                 "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Sans CJK HK",
+                 "Heiti SC", "MingLiU", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* ---- Sidebar ---- */
+  .sidebar {
+    width: 260px;
+    flex: 0 0 260px;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    padding: 20px 14px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  .sidebar h1 {
+    font-size: 16px;
+    margin: 0 0 4px;
+    color: var(--accent);
+    letter-spacing: .02em;
+  }
+  .sidebar .sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+  .nav-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+    margin: 14px 6px 8px;
+  }
+  .case-list { list-style: none; margin: 0; padding: 0; }
+  .case-list li button {
+    width: 100%;
+    text-align: left;
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+    padding: 9px 11px;
+    margin-bottom: 6px;
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: 13.5px;
+    transition: all .15s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .case-list li button:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .case-list li button.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    box-shadow: var(--shadow);
+  }
+  .case-list .cid { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .case-list .ctitle {
+    flex: 1; color: inherit; opacity: .9;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: 12px;
+  }
+  .case-list li button.active .ctitle { opacity: 1; }
+
+  /* ---- Main ---- */
+  .main { flex: 1; padding: 28px clamp(18px, 4vw, 48px); max-width: 980px; }
+  .case-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 24px clamp(18px, 3vw, 32px);
+    box-shadow: var(--shadow);
+    margin-bottom: 22px;
+  }
+  .case-head { border-bottom: 2px solid var(--accent-soft); padding-bottom: 14px; margin-bottom: 18px; }
+  .case-head .id-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .case-head h2 { font-size: 22px; margin: 0; }
+  .kind-badge {
+    font-size: 11px; font-weight: 600; letter-spacing: .04em;
+    background: var(--accent-soft); color: var(--accent);
+    padding: 3px 9px; border-radius: 999px; text-transform: uppercase;
+  }
+  .case-head .cid { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  section.block { margin-bottom: 26px; }
+  section.block > h3 {
+    font-size: 15px; margin: 0 0 12px;
+    color: var(--accent);
+    display: flex; align-items: center; gap: 8px;
+  }
+  section.block > h3::before {
+    content: ""; width: 6px; height: 18px; border-radius: 3px; background: var(--accent);
+    display: inline-block;
+  }
+
+  /* persona key/value */
+  .kv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 22px; }
+  .kv { border-left: 3px solid var(--accent-soft); padding: 4px 0 4px 12px; }
+  .kv .k { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .kv .v { font-size: 14.5px; color: var(--ink); }
+  .focus-list { margin: 12px 0 0; padding-left: 18px; }
+  .focus-list li { margin-bottom: 4px; font-size: 14px; color: var(--ink-soft); }
+
+  /* conversation */
+  .conv { display: flex; flex-direction: column; gap: 14px; }
+  .msg { border-radius: 12px; padding: 13px 16px; max-width: 92%; }
+  .msg .who { font-size: 11.5px; font-weight: 700; letter-spacing: .04em; margin-bottom: 5px; display: flex; gap: 8px; align-items: center; }
+  .msg .ex { font-size: 10.5px; color: var(--muted); font-weight: 600; }
+  .msg .body { font-size: 15px; white-space: pre-wrap; word-break: break-word; }
+  .msg.patient { background: var(--patient); border: 1px solid var(--patient-line); align-self: flex-start; }
+  .msg.patient .who { color: #4a5568; }
+  .msg.aya { background: var(--aya); border: 1px solid var(--aya-line); align-self: flex-end; }
+  .msg.aya .who { color: var(--good); }
+
+  /* judges */
+  .judge {
+    border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; margin-bottom: 16px;
+    background: #fcfdfe;
+  }
+  .judge-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .judge-head h4 { margin: 0; font-size: 17px; }
+  .judge-head .role { font-size: 11px; color: var(--muted); }
+
+  .scores { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .score-badge {
+    display: inline-flex; flex-direction: column; align-items: center;
+    min-width: 78px; padding: 7px 10px; border-radius: 10px;
+    background: #fff; border: 1px solid var(--line);
+  }
+  .score-badge .label { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+  .score-badge .val { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .score-badge.s-high { border-color: #bfe3d3; }
+  .score-badge.s-high .val { color: var(--good); }
+  .score-badge.s-mid  { border-color: #ecd9ad; }
+  .score-badge.s-mid .val { color: var(--warn); }
+  .score-badge.s-low  { border-color: #eac3bd; }
+  .score-badge.s-low .val { color: var(--bad); }
+
+  .gate-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .gate-pill { font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: #fff; }
+  .gate-pill.pass { color: var(--good); border-color: #bfe3d3; background: #f1faf5; }
+  .gate-pill.fail { color: var(--bad); border-color: #eac3bd; background: #fdf1ef; }
+
+  .list-h { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); margin: 12px 0 6px; }
+  ul.points { margin: 0 0 4px; padding-left: 20px; }
+  ul.points li { font-size: 14px; margin-bottom: 4px; }
+  ul.points.empty { list-style: none; padding-left: 0; color: var(--muted); font-style: italic; }
+
+  .summary { font-size: 14.5px; color: var(--ink-soft); background: var(--accent-soft); border-radius: 10px; padding: 12px 14px; margin-top: 12px; }
+
+  table.flags { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+  table.flags th, table.flags td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  table.flags th { background: #f1f4f8; color: var(--ink-soft); font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; }
+  table.flags tr:nth-child(even) td { background: #fafbfc; }
+  .sev { font-weight: 700; padding: 1px 7px; border-radius: 6px; font-size: 11.5px; white-space: nowrap; }
+  .sev.minor { color: var(--warn); background: #fbf1da; }
+  .sev.moderate { color: #b06a1e; background: #fbe8d0; }
+  .sev.major { color: var(--bad); background: #fbe4e0; }
+  .sev.critical { color: #fff; background: var(--bad); }
+
+  .nav-pager { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; }
+  .nav-pager button {
+    border: 1px solid var(--line); background: #fff; color: var(--accent);
+    padding: 9px 16px; border-radius: 9px; cursor: pointer; font-size: 13.5px;
+  }
+  .nav-pager button:hover:not(:disabled) { background: var(--accent-soft); }
+  .nav-pager button:disabled { opacity: .4; cursor: not-allowed; }
+
+  .empty-state { color: var(--muted); text-align: center; padding: 60px 0; }
+
+  @media (max-width: 760px) {
+    .layout { flex-direction: column; }
+    .sidebar { width: 100%; flex: none; height: auto; position: static; border-right: none; border-bottom: 1px solid var(--line); }
+    .case-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .case-list li button { width: auto; margin: 0; }
+    .case-list .ctitle { display: none; }
+    .main { padding: 20px 16px; }
+    .msg { max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <h1>Aya · Eval Viewer</h1>
+    <div class="sub">Chatbot evaluation results · S01–S12</div>
+    <div class="nav-title">Cases</div>
+    <ul class="case-list" id="caseList"></ul>
+  </aside>
+
+  <main class="main" id="main"></main>
+</div>
+
+<script src="data.js"></script>
+<script>
+(function () {
+  "use strict";
+  var CASES = window.CASES || [];
+  var current = 0;
+  var listEl = document.getElementById("caseList");
+  var mainEl = document.getElementById("main");
+
+  function esc(s) {
+    if (s == null) return "";
+    return String(s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+  function scoreClass(v) {
+    if (v >= 4) return "s-high";
+    if (v >= 3) return "s-mid";
+    return "s-low";
+  }
+  function sevClass(s) {
+    s = (s || "").toLowerCase();
+    if (s === "critical") return "sev critical";
+    if (s === "major") return "sev major";
+    if (s === "moderate") return "sev moderate";
+    return "sev minor";
+  }
+
+  // ---- Sidebar ----
+  CASES.forEach(function (c, i) {
+    var li = document.createElement("li");
+    var btn = document.createElement("button");
+    btn.dataset.i = i;
+    var id = (c.case && c.case.id) ? c.case.id : ("S" + (i + 1));
+    var title = (c.case && c.case.title) ? c.case.title : "";
+    btn.innerHTML = '<span class="cid">' + esc(id) + '</span>' +
+                    '<span class="ctitle">' + esc(title) + '</span>';
+    btn.addEventListener("click", function () { select(i); });
+    li.appendChild(btn);
+    listEl.appendChild(li);
+  });
+
+  function select(i) {
+    if (i < 0) i = 0;
+    if (i >= CASES.length) i = CASES.length - 1;
+    current = i;
+    Array.prototype.forEach.call(listEl.querySelectorAll("button"), function (b) {
+      b.classList.toggle("active", Number(b.dataset.i) === i);
+    });
+    render(CASES[i], i);
+    mainEl.scrollTop = 0;
+    window.scrollTo(0, 0);
+  }
+
+  // ---- Renderers ----
+  function renderHeader(c) {
+    var cs = c.case || {};
+    var id = cs.id || "";
+    var kind = cs.kind ? '<span class="kind-badge">' + esc(cs.kind) + '</span>' : '';
+    return '<div class="case-card"><div class="case-head">' +
+      '<div class="id-row"><h2>' + esc(cs.title || "(untitled)") + '</h2>' + kind + '</div>' +
+      '<div class="cid">Case ID: ' + esc(id) + '</div>' +
+      '</div>';
+  }
+
+  function renderBackground(c) {
+    var cs = c.case || {};
+    var pp = cs.patient_persona || {};
+    var rows = "";
+    var labelMap = {
+      age: "Age", language: "Language", cancer_history: "Cancer history",
+      style: "Communication style", gender: "Gender", occupation: "Occupation",
+      education: "Education", stage: "Stage", concerns: "Concerns"
+    };
+    Object.keys(pp).forEach(function (k) {
+      var v = pp[k];
+      if (Array.isArray(v)) v = v.join("、");
+      rows += '<div class="kv"><div class="k">' + esc(labelMap[k] || k) +
+              '</div><div class="v">' + esc(v) + '</div></div>';
+    });
+    var focus = "";
+    if (cs.judge_focus && cs.judge_focus.length) {
+      focus = '<div class="list-h">Judge Focus</div><ul class="focus-list">';
+      cs.judge_focus.forEach(function (f) { focus += '<li>' + esc(f) + '</li>'; });
+      focus += '</ul>';
+    }
+    return '<section class="block"><h3>Background</h3>' +
+      '<div class="kv-grid">' + rows + '</div>' + focus + '</section>';
+  }
+
+  function renderConversation(c) {
+    var tr = c.transcript || [];
+    var html = '<section class="block"><h3>Conversation</h3><div class="conv">';
+    tr.forEach(function (t) {
+      var ex = t.exchange != null ? '<span class="ex">#Exchange ' + esc(t.exchange) + '</span>' : '';
+      html += '<div class="msg patient"><div class="who">🙍 Patient ' + ex + '</div>' +
+              '<div class="body">' + esc(t.patient_message) + '</div></div>';
+      html += '<div class="msg aya"><div class="who">💬 Aya (chatbot) ' + ex + '</div>' +
+              '<div class="body">' + esc(t.chatbot_response) + '</div></div>';
+    });
+    html += '</div></section>';
+    return html;
+  }
+
+  function renderJudge(key, label, j) {
+    if (!j) return "";
+    var sc = j.scores || {};
+    var scoreKeys = ["understanding", "accuracy", "readability", "empathy"];
+    var scoresHtml = '<div class="scores">';
+    scoreKeys.forEach(function (k) {
+      var v = sc[k];
+      if (v == null) return;
+      scoresHtml += '<div class="score-badge ' + scoreClass(v) + '">' +
+        '<span class="label">' + esc(k) + '</span>' +
+        '<span class="val">' + esc(v) + '<span style="font-size:11px;color:var(--muted)">/5</span></span></div>';
+    });
+    scoresHtml += '</div>';
+
+    var gate = "";
+    if (j.scope_gate != null) {
+      var g = String(j.scope_gate).toLowerCase();
+      var cls = (g === "pass") ? "pass" : (g === "fail" ? "fail" : "");
+      gate += '<span class="gate-pill ' + cls + '">scope_gate: ' + esc(j.scope_gate) + '</span>';
+    }
+    if (j.auto_fail != null) {
+      var af = j.auto_fail === true || j.auto_fail === "true";
+      gate += '<span class="gate-pill ' + (af ? "fail" : "pass") + '">auto_fail: ' + esc(String(j.auto_fail)) + '</span>';
+    }
+
+    function listBlock(title, arr) {
+      if (!arr) arr = [];
+      var h = '<div class="list-h">' + esc(title) + '</div>';
+      if (!arr.length) { h += '<ul class="points empty"><li>(none)</li></ul>'; return h; }
+      h += '<ul class="points">';
+      arr.forEach(function (x) { h += '<li>' + esc(x) + '</li>'; });
+      h += '</ul>';
+      return h;
+    }
+
+    var flags = j.turn_flags || [];
+    var flagsHtml = '<div class="list-h">Turn Flags</div>';
+    if (!flags.length) {
+      flagsHtml += '<ul class="points empty"><li>(none)</li></ul>';
+    } else {
+      flagsHtml += '<table class="flags"><thead><tr>' +
+        '<th>#Ex</th><th>Severity</th><th>Issue</th><th>Evidence</th></tr></thead><tbody>';
+      flags.forEach(function (f) {
+        flagsHtml += '<tr><td>' + esc(f.exchange != null ? f.exchange : "—") + '</td>' +
+          '<td><span class="' + sevClass(f.severity) + '">' + esc(f.severity || "minor") + '</span></td>' +
+          '<td>' + esc(f.issue) + '</td><td>' + esc(f.evidence) + '</td></tr>';
+      });
+      flagsHtml += '</tbody></table>';
+    }
+
+    var summary = j.summary ? '<div class="summary">' + esc(j.summary) + '</div>' : '';
+
+    return '<div class="judge"><div class="judge-head">' +
+      '<h4>' + esc(label) + ' Judge</h4>' +
+      '<span class="role">evaluation of this case</span></div>' +
+      scoresHtml + gate + listBlock("Strengths", j.strengths) +
+      listBlock("Issues", j.issues) + flagsHtml + summary + '</div>';
+  }
+
+  function renderJudges(c) {
+    var j = c.judge || {};
+    return '<section class="block"><h3>Judges</h3>' +
+      renderJudge("nurse", "Nurse", j.nurse) +
+      renderJudge("social_worker", "Social Worker", j.social_worker) +
+      '</section>';
+  }
+
+  function render(c, i) {
+    if (!c) { mainEl.innerHTML = '<div class="empty-state">No case data.</div>'; return; }
+    mainEl.innerHTML =
+      renderHeader(c) +
+      renderBackground(c) +
+      renderConversation(c) +
+      renderJudges(c) +
+      '</div>' + // close case-card
+      '<div class="nav-pager">' +
+        '<button id="prevBtn"' + (i === 0 ? " disabled" : "") + '>← Previous</button>' +
+        '<button id="nextBtn"' + (i === CASES.length - 1 ? " disabled" : "") + '>Next →</button>' +
+      '</div>';
+    var prev = document.getElementById("prevBtn");
+    var next = document.getElementById("nextBtn");
+    if (prev) prev.addEventListener("click", function () { select(i - 1); });
+    if (next) next.addEventListener("click", function () { select(i + 1); });
+  }
+
+  if (!CASES.length) {
+    mainEl.innerHTML = '<div class="empty-state">No cases loaded. Ensure data.js exists next to index.html.</div>';
+  } else {
+    select(0);
+  }
+})();
+</script>
+</body>
+</html>
