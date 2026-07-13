@@ -43,7 +43,8 @@
     background: var(--panel);
     border-right: 1px solid var(--line);
     padding: 20px 14px;
-    position: sticky;
+    position: fixed;
+    left: 0;
     top: 0;
     height: 100vh;
     overflow-y: auto;
@@ -99,7 +100,8 @@
   .case-list li button.active .ctitle { opacity: 1; }
 
   /* ---- Main ---- */
-  .main { flex: 1; padding: 28px clamp(18px, 4vw, 48px); max-width: 980px; }
+  .main { flex: 1; padding: 28px 260px; display: flex; flex-direction: column; align-items: center; }
+  .main > .case-card, .main > .nav-pager { width: 100%; max-width: 980px; }
   .case-card {
     background: var(--panel);
     border: 1px solid var(--line);
